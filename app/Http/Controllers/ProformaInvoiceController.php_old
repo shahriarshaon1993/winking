@@ -1,0 +1,210 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
+use App\Vendor;
+use App\Customer;
+use App\InvoiceTo;
+use App\ProformaInvoice;
+use App\PaymentTerms;
+use Auth;
+
+class ProformaInvoiceController extends Controller
+{
+    /**
+     * Display a listing of the resource.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function index()
+    {
+        $lims_invoice_all = ProformaInvoice::where('is_active',true)->get();
+        $lims_invoice_to_all = InvoiceTo::where('is_active',true)->get();
+        $lims_customer_all = Customer::where('is_active', true)->get();
+        return view('proforma_invoice.index',compact('lims_invoice_all','lims_invoice_to_all','lims_customer_all'));
+    }
+
+    /**
+     * Show the form for creating a new resource.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function create()
+    {
+        $lims_vendor_all = Vendor::where('is_active',true)->get();
+        $lims_invoice_to_all = InvoiceTo::where('is_active',true)->get();
+        $lims_customer_all = Customer::where('is_active', true)->get();
+        $lims_payment_terms = PaymentTerms::where('is_active',true)->get();
+        return view('proforma_invoice.create',compact('lims_vendor_all','lims_invoice_to_all','lims_customer_all','lims_payment_terms'));
+    }
+
+    /**
+     * Store a newly created resource in storage.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
+    public function store(Request $request)
+    {
+        $data = $request->all();
+        $data['is_active'] = true;
+        $data['user_id'] = Auth::id();
+        $mercendies = [];
+        foreach($request->total_value as $key=>$total_value){
+            $input = [];
+            $input['po'] = $data['po'][$key];
+            $input['style'] = $data['style'][$key];
+            $input['item_description'] = $data['item_description'][$key];
+            $input['color'] = $data['color'][$key];
+            $input['quantity'] = $data['quantity'][$key];
+            $input['unit_price'] = $data['unit_price'][$key];
+            $input['total_value'] = $total_value;
+            array_push($mercendies,$input);
+        }
+
+        $data['merchandies'] = serialize($mercendies);
+        $data['instruction'] = serialize($request->instruction);
+
+        try {
+            ProformaInvoice::create($data);
+            $message = "Data insert successfully";
+        }
+        catch(\Exception $e){
+            $message = 'Something error found';
+        }
+        return redirect('proforma_invoice')->with('message',$message);
+
+
+    }
+
+    /**
+     * Display the specified resource.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function show($id)
+    {
+        $lim_invoice_data = ProformaInvoice::find($id);
+        return view('proforma_invoice.view',compact('lim_invoice_data'));
+    }
+
+    /**
+     * Show the form for editing the specified resource.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function edit($id)
+    {
+        $lims_vendor_all = Vendor::where('is_active',true)->get();
+        $lims_invoice_to_all = InvoiceTo::where('is_active',true)->get();
+        $lims_customer_all = Customer::where('is_active', true)->get();
+        $lim_invoice_data = ProformaInvoice::find($id);
+        $lims_payment_terms = PaymentTerms::where('is_active',true)->get();
+        return view('proforma_invoice.edit',compact('lims_vendor_all','lims_invoice_to_all','lim_invoice_data','lims_customer_all','lims_payment_terms'));
+    }
+
+    /**
+     * Update the specified resource in storage.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function update(Request $request, $id)
+    {
+        $data = $request->all();
+        $data['is_active'] = true;
+        $data['user_id'] = Auth::id();
+        $mercendies = [];
+        foreach($request->total_value as $key=>$total_value){
+            $input = [];
+            $input['po'] = $data['po'][$key];
+            $input['style'] = $data['style'][$key];
+            $input['item_description'] = $data['item_description'][$key];
+            $input['color'] = $data['color'][$key];
+            $input['quantity'] = $data['quantity'][$key];
+            $input['unit_price'] = $data['unit_price'][$key];
+            $input['total_value'] = $total_value;
+            array_push($mercendies,$input);
+        }
+
+        $data['merchandies'] = serialize($mercendies);
+        $data['instruction'] = serialize($request->instruction);
+
+        try {
+            $invoice = ProformaInvoice::find($id);
+            $invoice->update($data);
+            $message = "Data updated successfully";
+        }
+        catch(\Exception $e){
+            $message = 'Something error found';
+        }
+        return redirect('proforma_invoice')->with('message',$message);
+
+    }
+
+    /**
+     * Remove the specified resource from storage.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function destroy($id)
+    {
+        try {
+            $invoice = ProformaInvoice::find($id)->delete();
+            $message = "Data deleted successfully";
+        }
+        catch(\Exception $e){
+            $message = 'Something error found';
+        }
+        return redirect()->back()->with('message',$message);
+    }
+
+    public function print($id){
+        $lim_invoice_data = ProformaInvoice::find($id);
+        return view('proforma_invoice.print',compact('lim_invoice_data'));
+    }
+
+    public function getFiltering(){
+        $lims_invoice_all = ProformaInvoice::where('is_active',true)->get();
+        $lims_invoice_to_all = InvoiceTo::where('is_active',true)->get();
+        $lims_customer_all = Customer::where('is_active', true)->get();
+        return view('proforma_invoice.index',compact('lims_invoice_all','lims_invoice_to_all','lims_customer_all'));
+    }
+    
+    public function proformaInvoice($id){
+        $lim_invoice_data = ProformaInvoice::find($id);
+        return view('proforma_invoice.proforma_invoice',compact('lim_invoice_data'));
+    }
+
+    public function filtering(Request $request){
+        //return $request->all();
+        if($request->customer_id == null && $request->invoice_to_id == null){
+            return redirect()->back()->with('not_permitted','Please select filtering criteria');
+        }
+        $lims_customer_all = Customer::where('is_active', true)->get();
+        $lims_invoice_to_all = InvoiceTo::where('is_active',true)->get();
+
+        $customerId = $request->customer_id;
+        $invoiceId = $request->invoice_to_id;
+
+        $lims_invoice_all = ProformaInvoice::where(function($query) use($customerId,$invoiceId){
+                        if($customerId != null){
+                            return $query->where('customer_id',$customerId);
+                        }elseif($invoiceId != null){
+                            return $query->where('invoice_to_id',$invoiceId);
+                        }else{
+                            return $query->where('customer_id',$customerId)
+                                    ->where('invoice_to_id',$invoiceId);
+                        }
+        })->where('is_active', true)->get();
+
+        return view('proforma_invoice.index',compact('lims_invoice_all','lims_invoice_to_all','lims_customer_all','invoiceId','customerId'));
+
+    }
+}

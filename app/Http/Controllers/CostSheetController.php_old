@@ -1,0 +1,307 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
+use App\Customer;
+use App\CostSheet;
+use App\CostSheetDetails;
+use App\Fabric;
+use App\PaymentTerms;
+use App\Trimming;
+use Auth;
+
+class CostSheetController extends Controller
+{
+    /**
+     * Display a listing of the resource.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function index()
+    {
+        $lims_cost_all = CostSheet::where('is_active',true)->get();
+        return view('cost_sheet.list',compact('lims_cost_all'));
+    }
+
+    /**
+     * Show the form for creating a new resource.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function create()
+    {
+        $lim_payment_terms = PaymentTerms::where('is_active', true)->get();
+        $lims_customer_all = Customer::where('is_active', true)->get();
+        $lims_trean_data = Trimming::where('is_active',true)->get();
+        return view('cost_sheet.create',compact('lims_customer_all','lim_payment_terms','lims_trean_data'));
+    }
+
+    /**
+     * Store a newly created resource in storage.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
+    public function store(Request $request)
+    {
+        //return $request->all();
+
+        $this->validate($request,[
+            'customer_id' => 'required|integer',
+            'style_no' => 'string|required|max:100',
+            'season' => 'string|nullable|max:100',
+            'brand' => 'string|required|max:100',
+            'size_scale' => 'string|required|max:100',
+            'item_description' => 'required|string|max:200',
+            'order_quantity' => 'required|integer|min:0',
+            'target_price' => 'required|numeric|min:0',
+            'fabric_total_cost' => 'required|numeric|min:0',
+            'trim_total_cost' => 'required|numeric|min:0',
+
+            'making_price' => 'required|numeric|min:0',
+            'washing_description' => 'string|max:255',
+            'washing_price' => 'required|numeric|min:0',
+            'dry_process_price' => 'required|numeric|min:0',
+            'other_price' => 'required|numeric|min:0',
+            'dry_process_description' => 'string|max:255',
+
+
+            'fabric.*' => 'required|string|max:200',
+            'fabric_item_code.*' => 'string|max:100',
+            'fabric_item_description.*' => 'string|max:255',
+            'fabric_price.*' => 'required|numeric|min:0',
+            'fabric_consumption.*' => 'required|numeric|min:0',
+            'fabric_wastage.*' => 'required|numeric|min:0',
+            'fabric_total_price.*' => 'required|numeric|min:0',
+
+            'trimming.*' => 'required|string|max:200',
+            'trim_item_code.*' => 'string|max:100',
+            'trim_item_description.*' => 'string:max:255',
+            'trim_price.*' => 'required|numeric|min:0',
+            'trim_consumption.*' => 'required|numeric|min:0',
+            'trim_wastage.*' => 'required|numeric|min:0',
+            'trim_total_price.*' => 'required|numeric|min:0',
+
+            'cmptw_total_price' => 'required|numeric|min:0',
+            'fob_total_price' => 'required|numeric|min:0',
+            'tf_wastage' => 'required|numeric|min:0',
+            'tf_cost' => 'required|numeric|min:0',
+            'cil_price' => 'required|numeric|min:0',
+            'total_cost' => 'required|numeric|min:0',
+            'cost_per_pc' => 'required|numeric|min:0',
+
+        ],[
+            'customer_id.required' => 'Please select customer'
+        ]);
+
+        $data = $request->all();
+        $data['user_id'] = Auth::id();
+        $data['is_active'] = true;
+
+        try{
+            $cost_sheet = CostSheet::create($data);
+
+            $fabric = [];
+            foreach($request->fabric_total_price as $key=>$price){
+                $fabric['cost_sheet_id'] = $cost_sheet->id;
+                $fabric['fabric'] = $data['fabric'][$key];
+                $fabric['fabric_item_code'] = $data['fabric_item_code'][$key];
+                $fabric['fabric_item_description'] = $data['fabric_item_description'][$key];
+                $fabric['fabric_price'] = $data['fabric_price'][$key];
+                $fabric['fabric_consumption'] = $data['fabric_consumption'][$key];
+                $fabric['fabric_wastage'] = $data['fabric_wastage'][$key];
+                $fabric['fabric_total_price'] = $price;
+                $fabric['is_active'] = true;
+
+                Fabric::create($fabric);
+            }
+
+            $details = [];
+            foreach($request->trim_total_price as $key=>$price){
+                $details['cost_sheet_id'] = $cost_sheet->id;
+                $details['trimming'] = $data['trimming'][$key];
+                $details['trim_item_code'] = $data['trim_item_code'][$key];
+                $details['trim_item_description'] = $data['trim_item_description'][$key];
+                $details['trim_price'] = $data['trim_price'][$key];
+                $details['trim_consumption'] = $data['trim_consumption'][$key];
+                $details['trim_wastage'] = $data['trim_wastage'][$key];
+                $details['trim_total_price'] = $price;
+                $details['is_active'] = true;
+
+                CostSheetDetails::create($details);
+            }
+
+            $message = 'Cost sheet added successfully';
+        }catch(\Exception $e){
+            $message = 'something wrong !';
+        }
+        return redirect('cost_sheet')->with('message',$message);
+    }
+
+    /**
+     * Display the specified resource.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function show($id)
+    {
+        $lims_cost_data = CostSheet::find($id);
+        $lims_fabrics_all = Fabric::where('cost_sheet_id',$id)->get();
+        $lims_details_all = CostSheetDetails::where('cost_sheet_id',$id)->get();
+        return view('cost_sheet.view',compact('lims_cost_data','lims_fabrics_all','lims_details_all'));
+    }
+
+    /**
+     * Show the form for editing the specified resource.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function edit($id)
+    {
+        $lims_customer_all = Customer::where('is_active', true)->get();
+        $lims_cost_data = CostSheet::find($id);
+        $lims_fabrics_all = Fabric::where('cost_sheet_id',$id)->get();
+        $lims_details_all = CostSheetDetails::where('cost_sheet_id',$id)->get();
+        return view('cost_sheet.edit',compact('lims_customer_all','lims_cost_data','lims_fabrics_all','lims_details_all'));
+    }
+
+    /**
+     * Update the specified resource in storage.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function update(Request $request, $id)
+    {
+        $this->validate($request,[
+            'customer_id' => 'required|integer',
+            'style_no' => 'string|required|max:100',
+            'season' => 'string|nullable|max:100',
+            'brand' => 'string|required|max:100',
+            'size_scale' => 'string|required|max:100',
+            'item_description' => 'required|string|max:200',
+            'order_quantity' => 'required|integer|min:0',
+            'target_price' => 'required|numeric|min:0',
+            'fabric_total_cost' => 'required|numeric|min:0',
+            'trim_total_cost' => 'required|numeric|min:0',
+
+            'making_price' => 'required|numeric|min:0',
+            'making_consumption' => 'required|numeric|min:0',
+            'making_wastage' => 'required|numeric|min:0',
+            'making_total_price' => 'required|numeric|min:0',
+
+            'washing_description' => 'string|max:255',
+            'washing_price' => 'required|numeric|min:0',
+            'washing_consumption' => 'required|numeric|min:0',
+            'washing_wastage' => 'required|numeric|min:0',
+            'washing_total_price' => 'required|numeric|min:0',
+
+            'fabric.*' => 'required|string|max:200',
+            'fabric_item_code.*' => 'string|max:100',
+            'fabric_item_description.*' => 'string|max:255',
+            'fabric_price.*' => 'required|numeric|min:0',
+            'fabric_consumption.*' => 'required|numeric|min:0',
+            'fabric_wastage.*' => 'required|numeric|min:0',
+            'fabric_total_price.*' => 'required|numeric|min:0',
+
+            'trimming.*' => 'required|string|max:200',
+            'trim_item_code.*' => 'string|max:100',
+            'trim_item_description.*' => 'string:max:255',
+            'trim_price.*' => 'required|numeric|min:0',
+            'trim_consumption.*' => 'required|numeric|min:0',
+            'trim_wastage.*' => 'required|numeric|min:0',
+            'trim_total_price.*' => 'required|numeric|min:0',
+
+            'cmptw_total_price' => 'required|numeric|min:0',
+            'fob_total_price' => 'required|numeric|min:0',
+            'tf_wastage' => 'required|numeric|min:0',
+            'tf_cost' => 'required|numeric|min:0',
+            'cil_price' => 'required|numeric|min:0',
+            'total_cost' => 'required|numeric|min:0',
+            'cost_per_pc' => 'required|numeric|min:0',
+
+        ],[
+            'customer_id.required' => 'Please select customer'
+        ]);
+
+        $data = $request->all();
+        $data['user_id'] = Auth::id();
+        $data['is_active'] = true;
+
+        try{
+            $cost_sheet = CostSheet::findOrFail($id);
+            $cost_sheet->update($data);
+
+            //delete previous details
+            $fabric = Fabric::where('cost_sheet_id', $id)->delete();
+
+        if ($request->fabric_total_price != null) {
+            $fabric = [];
+            foreach($request->fabric_total_price as $key=>$price){
+                $fabric['cost_sheet_id'] = $cost_sheet->id;
+                $fabric['fabric'] = $data['fabric'][$key];
+                $fabric['fabric_item_code'] = $data['fabric_item_code'][$key];
+                $fabric['fabric_item_description'] = $data['fabric_item_description'][$key];
+                $fabric['fabric_price'] = $data['fabric_price'][$key];
+                $fabric['fabric_consumption'] = $data['fabric_consumption'][$key];
+                $fabric['fabric_wastage'] = $data['fabric_wastage'][$key];
+                $fabric['fabric_total_price'] = $price;
+                $fabric['is_active'] = true;
+
+                Fabric::create($fabric);
+            }
+        }
+
+            //delete previous details
+            $trim = CostSheetDetails::where('cost_sheet_id', $id)->delete();
+
+        if ($request->trim_total_price != null) {
+            $details = [];
+            foreach($request->trim_total_price as $key=>$price){
+                $details['cost_sheet_id'] = $cost_sheet->id;
+                $details['trimming'] = $data['trimming'][$key];
+                $details['trim_item_code'] = $data['trim_item_code'][$key];
+                $details['trim_item_description'] = $data['trim_item_description'][$key];
+                $details['trim_price'] = $data['trim_price'][$key];
+                $details['trim_consumption'] = $data['trim_consumption'][$key];
+                $details['trim_wastage'] = $data['trim_wastage'][$key];
+                $details['trim_total_price'] = $price;
+                $details['is_active'] = true;
+
+                CostSheetDetails::create($details);
+            }
+        }
+            $message = 'Cost sheet updated successfully';
+        }catch(\Exception $e){
+            $message = 'something wrong !';
+        }
+        return redirect('cost_sheet')->with('message',$message);
+    }
+
+    /**
+     * Remove the specified resource from storage.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function destroy($id)
+    {
+        CostSheet::find($id)->delete();
+        Fabric::where('cost_sheet_id', $id)->delete();
+        CostSheetDetails::where('cost_sheet_id', $id)->delete();
+
+        return redirect('cost_sheet')->with('message','Cost sheet deleted successfully');
+    }
+
+    public function printCostSheet($id){
+        $lims_cost_data = CostSheet::find($id);
+        $lims_fabrics_all = Fabric::where('cost_sheet_id',$id)->get();
+        $lims_details_all = CostSheetDetails::where('cost_sheet_id',$id)->get();
+        return view('cost_sheet.print',compact('lims_cost_data','lims_fabrics_all','lims_details_all'));
+    }
+}

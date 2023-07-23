@@ -1,0 +1,326 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
+use App\Vendor;
+use App\ShipTo;
+use App\InvoiceTo;
+use App\PurchaseContract;
+USE App\PurchaseContractDetails;
+use App\GeneralSetting;
+use App\PaymentTerms;
+use App\Applicant;
+use App\NotifyParty;
+use NumberToWords\NumberToWords;
+use Auth;
+
+class PurchaseContractController extends Controller
+{
+    /**
+     * Display a listing of the resource.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function index()
+    {
+        $lims_contract_all = PurchaseContract::where('is_active', true)->get();
+        $lims_vendor_all = Vendor::where('is_active',true)->get();
+        $lims_invoice_to_all = InvoiceTo::where('is_active',true)->get();
+        return view('purchase_contract.index',compact('lims_contract_all','lims_vendor_all','lims_invoice_to_all'));
+    }
+
+    /**
+     * Show the form for creating a new resource.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function create()
+    {
+        $lims_vendor_all = Vendor::where('is_active',true)->get();
+        $lims_ship_to_all = ShipTo::where('is_active',true)->get();
+        $notify_all = NotifyParty::where('is_active',true)->get();
+        $lims_applicant_all = Applicant::where('is_active',true)->get();
+        $lims_payment_terms = PaymentTerms::where('is_active',true)->get();
+        return view('purchase_contract.create',compact('lims_vendor_all','lims_ship_to_all','lims_payment_terms','notify_all','lims_applicant_all'));
+    }
+
+    /**
+     * Store a newly created resource in storage.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
+    public function store(Request $request)
+    {
+        //return $request->all();
+        $data =  $request->all();
+        $data['is_active'] = true;
+        $data['user_id'] = Auth::id();
+
+        try {
+            $contract = PurchaseContract::create($data);
+
+            $details = [];
+            foreach($request->total_value as $key=>$total){
+
+                $details['contract_id'] = $contract->id;
+                $details['vpo'] = $data['vpo'][$key];
+                $details['style'] = $data['style'][$key];
+                $details['item_description'] = $data['item_description'][$key];
+                $details['color'] = $data['color'][$key];
+                $details['quantity'] = $data['quantity'][$key];
+                $details['unit_price'] = $data['unit_price'][$key];
+                $details['unit_price_master'] = $data['unit_price_master'][$key];
+                $details['total_value_master'] = $data['total_value_master'][$key];
+                $details['total_value'] = $total;
+                $details['is_active'] = true;
+                $details['user_id'] = Auth::id();
+
+                PurchaseContractDetails::create($details);
+            }
+            $message = "Data insert successfully";
+        }
+        catch(\Exception $e){
+            $message = 'Something error found';
+        }
+        return redirect('purchase_contract')->with('message',$message);
+    }
+
+    /**
+     * Display the specified resource.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function show($id)
+    {
+        $lims_contract_data = PurchaseContract::find($id);
+        $general_setting = GeneralSetting::first();
+        $details = PurchaseContractDetails::where('contract_id',$id)->get();
+        
+        $numberToWords = new NumberToWords();
+        if(\App::getLocale() == 'ar' || \App::getLocale() == 'hi' || \App::getLocale() == 'vi' || \App::getLocale() == 'en-gb')
+            $numberTransformer = $numberToWords->getNumberTransformer('en');
+        else
+            $numberTransformer = $numberToWords->getNumberTransformer(\App::getLocale());
+        $numberInWords = $numberTransformer->toWords($lims_contract_data->total_amount);
+        $amount_after_decimal = round($lims_contract_data->total_amount - ($num = floor($lims_contract_data->total_amount)), 2) * 100;
+        $numberInWordsAfterDecimal = $numberTransformer->toWords($amount_after_decimal);
+        if($numberInWordsAfterDecimal == ""){
+            $numberInWordsAfterDecimal = "Zero";
+        }
+        return view('purchase_contract.view',compact('lims_contract_data','general_setting','details','numberInWords','numberInWordsAfterDecimal'));
+    }
+
+    /**
+     * Show the form for editing the specified resource.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function edit($id)
+    {
+        $lims_contract_data = PurchaseContract::find($id);
+        $details = PurchaseContractDetails::where('contract_id',$id)->get();
+        $lims_vendor_all = Vendor::where('is_active',true)->get();
+        $lims_ship_to_all = ShipTo::where('is_active',true)->get();
+        $notify_all = NotifyParty::where('is_active',true)->get();
+        $lims_applicant_all = Applicant::where('is_active',true)->get();
+        $lims_payment_terms = PaymentTerms::where('is_active',true)->get();
+        return view('purchase_contract.edit',compact('lims_vendor_all','lims_ship_to_all','lims_contract_data','details','lims_payment_terms','lims_applicant_all','notify_all'));
+    }
+
+    /**
+     * Update the specified resource in storage.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function update(Request $request, $id)
+    {
+        $data =  $request->all();
+        $data['is_active'] = true;
+        $data['user_id'] = Auth::id();
+
+        try {
+            $purchase_contract = PurchaseContract::findOrFail($id);
+            $purchase_contract->update($data);
+
+            //delete previous details
+            $detail = PurchaseContractDetails::where('contract_id', $id)->delete();
+            //$details->delete();
+            //insert new details
+            if ($request->total_value != null) {
+                $details = [];
+                foreach($request->total_value as $key=>$total){
+
+                    $details['contract_id'] = $id;
+                    $details['vpo'] = $data['vpo'][$key];
+                    $details['style'] = $data['style'][$key];
+                    $details['item_description'] = $data['item_description'][$key];
+                    $details['color'] = $data['color'][$key];
+                    $details['quantity'] = $data['quantity'][$key];
+                    $details['unit_price'] = $data['unit_price'][$key];
+                    $details['unit_price_master'] = $data['unit_price_master'][$key];
+                    $details['total_value_master'] = $data['total_value_master'][$key];
+                    $details['total_value'] = $total;
+                    $details['is_active'] = true;
+                    $details['user_id'] = Auth::id();
+
+                    PurchaseContractDetails::create($details);
+                }
+            }
+
+            $message = "Data updated successfully";
+
+        }
+        catch(\Exception $e){
+            $message = 'Something error found';
+        }
+        return redirect('purchase_contract')->with('message',$message);
+    }
+
+    /**
+     * Remove the specified resource from storage.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function destroy($id)
+    {
+        PurchaseContract::find($id)->delete();
+        PurchaseContractDetails::where('contract_id', $id)->delete();
+        return redirect('purchase_contract')->with('message','Data deleted successfully');
+    }
+
+    public function print($id){
+        $lims_contract_data = PurchaseContract::find($id);
+        $general_setting = GeneralSetting::first();
+        $details = PurchaseContractDetails::where('contract_id',$id)->get();
+        
+        $numberToWords = new NumberToWords();
+        if(\App::getLocale() == 'ar' || \App::getLocale() == 'hi' || \App::getLocale() == 'vi' || \App::getLocale() == 'en-gb')
+            $numberTransformer = $numberToWords->getNumberTransformer('en');
+        else
+            $numberTransformer = $numberToWords->getNumberTransformer(\App::getLocale());
+        $numberInWords = $numberTransformer->toWords($lims_contract_data->total_amount);
+        $amount_after_decimal = round($lims_contract_data->total_amount - ($num = floor($lims_contract_data->total_amount)), 2) * 100;
+        $numberInWordsAfterDecimal = $numberTransformer->toWords($amount_after_decimal);
+        if($numberInWordsAfterDecimal == ""){
+            $numberInWordsAfterDecimal = "Zero";
+        }
+        return view('purchase_contract.print',compact('lims_contract_data','general_setting','details','numberInWords','numberInWordsAfterDecimal'));
+    }
+
+    public function proforma_invoice($id){
+        $lims_contract_data = PurchaseContract::find($id);
+        $general_setting = GeneralSetting::first();
+        $details = PurchaseContractDetails::where('contract_id',$id)->get();
+        
+        $numberToWords = new NumberToWords();
+        if(\App::getLocale() == 'ar' || \App::getLocale() == 'hi' || \App::getLocale() == 'vi' || \App::getLocale() == 'en-gb')
+            $numberTransformer = $numberToWords->getNumberTransformer('en');
+        else
+            $numberTransformer = $numberToWords->getNumberTransformer(\App::getLocale());
+        $numberInWords = $numberTransformer->toWords($lims_contract_data->total_amount);
+        $amount_after_decimal = round($lims_contract_data->total_amount - ($num = floor($lims_contract_data->total_amount)), 2) * 100;
+        $numberInWordsAfterDecimal = $numberTransformer->toWords($amount_after_decimal);
+        if($numberInWordsAfterDecimal == ""){
+            $numberInWordsAfterDecimal = "Zero";
+        }
+        
+        return view('purchase_contract.proforma_invoice',compact('lims_contract_data','general_setting','details','numberInWords','numberInWordsAfterDecimal'));
+    }
+
+    public function getFiltering(){
+        $lims_contract_all = PurchaseContract::where('is_active', true)->get();
+        $lims_vendor_all = Vendor::where('is_active',true)->get();
+        $lims_invoice_to_all = InvoiceTo::where('is_active',true)->get();
+        return view('purchase_contract.index',compact('lims_contract_all','lims_vendor_all','lims_invoice_to_all'));
+    }
+
+    public function filtering(Request $request){
+        if(($request->vendor_id == null) && ($request->invoice_to_id == null)){
+            return redirect()->back()->with('not_permitted','Please select filtering criteria');
+        }
+
+        $vendorId = $request->vendor_id;
+        $invoiceId = $request->invoice_to_id;
+
+        $lims_vendor_all = Vendor::where('is_active',true)->get();
+        $lims_invoice_to_all = InvoiceTo::where('is_active',true)->get();
+
+        $lims_contract_all = PurchaseContract::where(function ($query) use ($invoiceId,$vendorId){
+               if($vendorId != null && $invoiceId != null ){
+                    return $query->where('vendor_id',$vendorId)
+                                 ->where('invoice_to',$invoiceId);
+               }elseif($vendorId != null){
+                     return $query->where('vendor_id',$vendorId);
+               }elseif($invoiceId != null){
+                return $query->where('invoice_to',$invoiceId);
+               }
+        })->where('is_active', true)->get();
+
+        return view('purchase_contract.index',compact('lims_contract_all','lims_vendor_all','lims_invoice_to_all','invoiceId','vendorId'));
+
+    }
+
+    public function purchaseMasterView($id){
+        $lims_contract_data = PurchaseContract::find($id);
+        $details = PurchaseContractDetails::where('contract_id',$id)->get();
+
+        $numberToWords = new NumberToWords();
+        if(\App::getLocale() == 'ar' || \App::getLocale() == 'hi' || \App::getLocale() == 'vi' || \App::getLocale() == 'en-gb')
+            $numberTransformer = $numberToWords->getNumberTransformer('en');
+        else
+            $numberTransformer = $numberToWords->getNumberTransformer(\App::getLocale());
+        $numberInWords = $numberTransformer->toWords($lims_contract_data->total_amount_master);
+        $amount_after_decimal = round($lims_contract_data->total_amount_master - ($num = floor($lims_contract_data->total_amount_master)), 2) * 100;
+        $numberInWordsAfterDecimal = $numberTransformer->toWords($amount_after_decimal);
+        if($numberInWordsAfterDecimal == ""){
+            $numberInWordsAfterDecimal = "Zero";
+        }
+
+        return view('purchase_contract.master_view',compact('lims_contract_data','details','numberInWords','numberInWordsAfterDecimal'));
+    }
+
+    public function printMaster($id){
+        $lims_contract_data = PurchaseContract::find($id);
+        $details = PurchaseContractDetails::where('contract_id',$id)->get();
+
+        $numberToWords = new NumberToWords();
+        if(\App::getLocale() == 'ar' || \App::getLocale() == 'hi' || \App::getLocale() == 'vi' || \App::getLocale() == 'en-gb')
+            $numberTransformer = $numberToWords->getNumberTransformer('en');
+        else
+            $numberTransformer = $numberToWords->getNumberTransformer(\App::getLocale());
+        $numberInWords = $numberTransformer->toWords($lims_contract_data->total_amount_master);
+        $amount_after_decimal = round($lims_contract_data->total_amount_master - ($num = floor($lims_contract_data->total_amount_master)), 2) * 100;
+        $numberInWordsAfterDecimal = $numberTransformer->toWords($amount_after_decimal);
+        if($numberInWordsAfterDecimal == ""){
+            $numberInWordsAfterDecimal = "Zero";
+        }
+        return view('purchase_contract.master_print',compact('lims_contract_data','details','numberInWords','numberInWordsAfterDecimal'));
+    }
+    
+    public function printMasterAlternate($id){
+        $lims_contract_data = PurchaseContract::find($id);
+        $details = PurchaseContractDetails::where('contract_id',$id)->get();
+
+        $numberToWords = new NumberToWords();
+        if(\App::getLocale() == 'ar' || \App::getLocale() == 'hi' || \App::getLocale() == 'vi' || \App::getLocale() == 'en-gb')
+            $numberTransformer = $numberToWords->getNumberTransformer('en');
+        else
+            $numberTransformer = $numberToWords->getNumberTransformer(\App::getLocale());
+        $numberInWords = $numberTransformer->toWords($lims_contract_data->total_amount_master);
+        $amount_after_decimal = round($lims_contract_data->total_amount_master - ($num = floor($lims_contract_data->total_amount_master)), 2) * 100;
+        $numberInWordsAfterDecimal = $numberTransformer->toWords($amount_after_decimal);
+        if($numberInWordsAfterDecimal == ""){
+            $numberInWordsAfterDecimal = "Zero";
+        }
+
+        return view('purchase_contract.master_print_alter',compact('lims_contract_data','details','numberInWords','numberInWordsAfterDecimal'));
+    }
+}

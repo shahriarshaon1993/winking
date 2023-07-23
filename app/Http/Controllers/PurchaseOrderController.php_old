@@ -1,0 +1,293 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
+use Carbon\Carbon;
+use App\Vendor;
+use App\ShipTo;
+use App\InvoiceTo;
+use App\PurchaseOrder;
+use App\QuotationBreakdown;
+use Auth;
+
+class PurchaseOrderController extends Controller
+{
+    /**
+     * Display a listing of the resource.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function index()
+    {
+        $lims_order_all = PurchaseOrder::all();
+        return view('purchase.order_list',compact('lims_order_all'));
+    }
+
+    /**
+     * Show the form for creating a new resource.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function create()
+    {
+        $lims_vendor_all = Vendor::where('is_active',true)->get();
+        $lims_ship_to_all = ShipTo::where('is_active',true)->get();
+        $lims_invoice_to_all = InvoiceTo::where('is_active',true)->get();
+        return view('purchase.order',compact('lims_vendor_all','lims_ship_to_all','lims_invoice_to_all'));
+    }
+
+    /**
+     * Store a newly created resource in storage.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
+    public function store(Request $request)
+    {
+        $this->validate($request, [
+            'po_number'=>'required|string|max:20',
+            'rivision_no'=>'required|date',
+            'lc_no'=>'required|string|max:30',
+            'order_date'=>'required|date',
+            'vendor'=>'required|integer',
+            'invoice_to'=>'required|integer',
+            'ship_to'=>'required|integer',
+            'ship_via'=>'string|max:100',
+            'season'=>'required|string',
+            'ship_exp_date'=>'required|date',
+            'cancel_date'=>'required|date',
+            'ship_terms'=>'string|max:200',
+            'payment_terms'=>'string|max:200',
+            'febric_ref'=>'string|max:200',
+            'brand'=>'string|max:100',
+            'style_no'=>'string|max:20',
+            'ca'=>'string|max:20',
+            'total_quantity'=>'required|integer',
+            'total_amount'=>'required|numeric',
+            'fabrication'=>'string|max:255',
+            'description'=>'string|max:255',
+            'packing_instruction'=>'string|max:500',
+            'instruction_notes'=>'string|max:1000',
+        ]);
+
+        try {
+
+            $data = $request->all();
+            $data['user_id'] = Auth::id();
+            $data['is_active'] = true;
+
+            $order = PurchaseOrder::create($data);
+
+            $breakdown = [];
+            foreach($request->color as $key=>$color){
+                $breakdown['purchase_id'] = $order->id;
+                $breakdown['color'] = $color;
+                $breakdown['color_code'] = $data['color_code'][$key];
+                $breakdown['color_wise_quantity'] = $data['color_wise_quantity'][$key];
+                $breakdown['color_unit_price'] = $data['color_unit_price'][$key];
+                $breakdown['sub_total'] = $data['sub_total'][$key];
+                $breakdown['size1'] = $data['size1'][$key];
+                $breakdown['size2'] = $data['size2'][$key];
+                $breakdown['size3'] = $data['size3'][$key];
+                $breakdown['size4'] = $data['size4'][$key];
+                $breakdown['size5'] = $data['size5'][$key];
+                $breakdown['size6'] = $data['size6'][$key];
+                $breakdown['size7'] = $data['size7'][$key];
+                $breakdown['size8'] = $data['size8'][$key];
+                $breakdown['size9'] = $data['size9'][$key];
+                $breakdown['prepack1'] = $data['prepack1'][$key];
+                $breakdown['prepack2'] = $data['prepack2'][$key];
+                $breakdown['prepack3'] = $data['prepack3'][$key];
+                $breakdown['prepack4'] = $data['prepack4'][$key];
+                $breakdown['prepack5'] = $data['prepack5'][$key];
+                $breakdown['prepack6'] = $data['prepack6'][$key];
+                $breakdown['prepack7'] = $data['prepack7'][$key];
+                $breakdown['prepack8'] = $data['prepack8'][$key];
+                $breakdown['prepack9'] = $data['prepack9'][$key];
+                $breakdown['quantity1'] = $data['quantity1'][$key];
+                $breakdown['quantity2'] = $data['quantity2'][$key];
+                $breakdown['quantity3'] = $data['quantity3'][$key];
+                $breakdown['quantity4'] = $data['quantity4'][$key];
+                $breakdown['quantity5'] = $data['quantity5'][$key];
+                $breakdown['quantity6'] = $data['quantity6'][$key];
+                $breakdown['quantity7'] = $data['quantity7'][$key];
+                $breakdown['quantity8'] = $data['quantity8'][$key];
+                $breakdown['quantity9'] = $data['quantity9'][$key];
+                $breakdown['is_active'] = true;
+
+                QuotationBreakdown::create($breakdown);
+            }
+            $message = 'Purchase order created successfully';
+        }
+        catch(\Exception $e){
+            $message = 'Something error found';
+        }
+
+        return redirect('purchase_order')->with('message', $message);
+
+    }
+
+    /**
+     * Display the specified resource.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function show($id)
+    {
+        $order = PurchaseOrder::find($id);
+        $lim_sizes = QuotationBreakdown::select('size1','size2','size1','size3','size4','size5','size6','size7','size8','size9')
+                    ->where('purchase_id',$id)->first();
+        $lim_details = QuotationBreakdown::where('purchase_id',$id)->get();
+        return view('purchase.order_view',compact('order','lim_details','lim_sizes'));
+    }
+
+    /**
+     * Show the form for editing the specified resource.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function edit($id)
+    {
+        $lims_vendor_all = Vendor::where('is_active',true)->get();
+        $lims_ship_to_all = ShipTo::where('is_active',true)->get();
+        $lims_invoice_to_all = InvoiceTo::where('is_active',true)->get();
+        $lim_order_data = PurchaseOrder::find($id);
+        $lim_details = QuotationBreakdown::where('purchase_id',$id)->get();
+        return view('purchase.order_edit',compact('lims_vendor_all','lims_ship_to_all','lims_invoice_to_all','lim_order_data','lim_details'));
+    }
+
+    /**
+     * Update the specified resource in storage.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function update(Request $request, $id)
+    {
+        $this->validate($request, [
+            'po_number'=>'required|string|max:20',
+            'rivision_no'=>'required|date',
+            'lc_no'=>'required|string|max:30',
+            'order_date'=>'required|date',
+            'vendor'=>'required|integer',
+            'invoice_to'=>'required|integer',
+            'ship_to'=>'required|integer',
+            'ship_via'=>'string|max:100',
+            'season'=>'required|string',
+            'ship_exp_date'=>'required|date',
+            'cancel_date'=>'required|date',
+            'ship_terms'=>'string|max:200',
+            'payment_terms'=>'string|max:200',
+            'febric_ref'=>'string|max:200',
+            'brand'=>'string|max:100',
+            'style_no'=>'string|max:20',
+            'ca'=>'string|max:20',
+            'total_quantity'=>'required|integer',
+            'total_amount'=>'required|numeric',
+            'fabrication'=>'string|max:255',
+            'description'=>'string|max:255',
+            'packing_instruction'=>'string|max:500',
+            'instruction_notes'=>'string|max:1000',
+        ]);
+        try {
+            $data = $request->all();
+            $lim_order_data = PurchaseOrder::find($id);
+            $lim_order_data->update($data);
+
+            $lim_order_details = QuotationBreakdown::where('purchase_id',$id)->get();
+            foreach($lim_order_details as $detail){
+                $old_color[] = $detail->color;
+                if (!(in_array($detail->color,$data['color']))) {
+                    QuotationBreakdown::where([
+                        ['purchase_id',$id],
+                        ['color',$detail->color]
+                    ])->delete();
+                }
+            }
+
+            $breakdown = [];
+            foreach($request->color as $key=>$color){
+                $breakdown['purchase_id'] = $id;
+                $breakdown['color'] = $color;
+                $breakdown['color_code'] = $data['color_code'][$key];
+                $breakdown['color_wise_quantity'] = $data['color_wise_quantity'][$key];
+                $breakdown['color_unit_price'] = $data['color_unit_price'][$key];
+                $breakdown['sub_total'] = $data['sub_total'][$key];
+                $breakdown['size1'] = $data['size1'][$key];
+                $breakdown['size2'] = $data['size2'][$key];
+                $breakdown['size3'] = $data['size3'][$key];
+                $breakdown['size4'] = $data['size4'][$key];
+                $breakdown['size5'] = $data['size5'][$key];
+                $breakdown['size6'] = $data['size6'][$key];
+                $breakdown['size7'] = $data['size7'][$key];
+                $breakdown['size8'] = $data['size8'][$key];
+                $breakdown['size9'] = $data['size9'][$key];
+                $breakdown['prepack1'] = $data['prepack1'][$key];
+                $breakdown['prepack2'] = $data['prepack2'][$key];
+                $breakdown['prepack3'] = $data['prepack3'][$key];
+                $breakdown['prepack4'] = $data['prepack4'][$key];
+                $breakdown['prepack5'] = $data['prepack5'][$key];
+                $breakdown['prepack6'] = $data['prepack6'][$key];
+                $breakdown['prepack7'] = $data['prepack7'][$key];
+                $breakdown['prepack8'] = $data['prepack8'][$key];
+                $breakdown['prepack9'] = $data['prepack9'][$key];
+                $breakdown['quantity1'] = $data['quantity1'][$key];
+                $breakdown['quantity2'] = $data['quantity2'][$key];
+                $breakdown['quantity3'] = $data['quantity3'][$key];
+                $breakdown['quantity4'] = $data['quantity4'][$key];
+                $breakdown['quantity5'] = $data['quantity5'][$key];
+                $breakdown['quantity6'] = $data['quantity6'][$key];
+                $breakdown['quantity7'] = $data['quantity7'][$key];
+                $breakdown['quantity8'] = $data['quantity8'][$key];
+                $breakdown['quantity9'] = $data['quantity9'][$key];
+                $breakdown['is_active'] = true;
+
+                if(in_array($color,$old_color)){
+                    QuotationBreakdown::where([
+                        ['purchase_id',$id],
+                        ['color',$color]
+                    ])->update($breakdown);
+                }else{
+                    QuotationBreakdown::create($breakdown);
+                }
+            }
+            $message = 'Purchase order updated successfully';
+        }
+        catch(\Exception $e){
+            $message = 'Something error found';
+        }
+        return redirect('purchase_order')->with('message', $message);
+    }
+
+    /**
+     * Remove the specified resource from storage.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function destroy($id)
+    {
+        try {
+            $order = PurchaseOrder::find($id);
+            $order->delete();
+            $breakdowns = QuotationBreakdown::where('purchase_id',$id)->delete();
+
+        }catch(\Exception $e){
+            $message = 'Something error found';
+        }
+        return redirect()->back()->with('message','Purchase order deleted  successfully');
+    }
+
+    public function printOrder($id){
+        $order = PurchaseOrder::find($id);
+        $lim_sizes = QuotationBreakdown::select('size1','size2','size1','size3','size4','size5','size6','size7','size8','size9')
+                    ->where('purchase_id',$id)->first();
+        $lim_details = QuotationBreakdown::where('purchase_id',$id)->get();
+        return view('purchase.order_print',compact('order','lim_details','lim_sizes'));
+    }
+}
